@@ -8,7 +8,7 @@ const ssm = require('@middy/ssm')
 const middyCacheEnabled = JSON.parse(process.env.middy_cache_enabled)
 const middyCacheExpiry = parseInt(process.env.middy_cache_expiry_milliseconds)
 
-const { serviceName, stage } = process.env
+const { serviceName, ssmStage } = process.env
 const tableName = process.env.restaurants_table
 
 const findRestaurantsByTheme = async (theme, count) => {
@@ -39,6 +39,6 @@ module.exports.handler = middy(async (event, context) => {
   cacheExpiry: middyCacheExpiry,
   setToContext: true,
   fetchData: {
-    config: `/${serviceName}/${stage}/search-restaurants/config`
+    config: `/${serviceName}/${ssmStage}/search-restaurants/config`
   }
 }))
