@@ -138,6 +138,18 @@ resources:
           - ALLOW_REFRESH_TOKEN_AUTH
         PreventUserExistenceErrors: ENABLED
 
+    ServiceUrlParameter:
+      Type: AWS::SSM::Parameter
+      Properties:
+        Type: String
+        Name: /${self:service}/${sls:stage}/serviceUrl
+        Value:
+          Fn::Join:
+            - ""
+            - - https://
+              - !Ref ApiGatewayRestApi
+              - .execute-api.${aws:region}.amazonaws.com/${sls:stage}
+
   Outputs:
     RestaurantsTableName:
       Value: !Ref RestaurantsTable
