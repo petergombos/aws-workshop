@@ -4,6 +4,7 @@ frameworkVersion: "3"
 
 custom:
   name: peter
+  alertEmail: peter@tabeo.co.uk
   export-env:
     overwrite: true
   exportOutputs:
@@ -119,6 +120,10 @@ functions:
       bus_name: !Ref EventBus
       restaurant_notification_topic: !Ref RestaurantNotificationTopic
       idempotency_table: !Ref IdempotencyTable
+    destinations:
+      onFailure:
+        type: sqs
+        arn: !GetAtt OnFailureQueue.Arn
 
 resources:
   Conditions:
@@ -295,6 +300,55 @@ resources:
         TimeToLiveSpecification:
           Enabled: true
           AttributeName: expiration
+
+    OnFailureQueue:
+      Type: AWS::SQS::Queue
+
+    AlarmTopic:
+      Type: AWS::SNS::Topic
+
+    AlarmTopicSubscription:
+      Type: AWS::SNS::Subscription
+      Properties:
+        Endpoint: ${self:custom.alertEmail}
+        Protocol: email
+        TopicArn: !Ref AlarmTopic
+
+    OnFailureQueueAlarm:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: "[${sls:stage}] [NotifyRestaurant function] Failed events detected in OnFailure destination"
+        MetricName: ApproximateNumberOfMessagesVisible
+        Namespace: AWS/SQS
+        Statistic: Maximum
+        Period: 300
+        EvaluationPeriods: 1
+        Threshold: 0
+        ComparisonOperator: GreaterThanThreshold
+        TreatMissingData: notBreaching
+        Dimensions:
+          - Name: QueueName
+            Value: !GetAtt OnFailureQueue.QueueName
+        AlarmActions:
+          - !Ref AlarmTopic
+
+    DestinationDeliveryFailuresAlarm:
+      Type: AWS::CloudWatch::Alarm
+      Properties:
+        AlarmName: "[${sls:stage}] [NotifyRestaurant function] Failed to deliver failed events to OnFailure destination"
+        MetricName: DestinationDeliveryFailures
+        Namespace: AWS/Lambda
+        Statistic: Average
+        Period: 300
+        EvaluationPeriods: 1
+        Threshold: 0
+        ComparisonOperator: GreaterThanThreshold
+        TreatMissingData: notBreaching
+        Dimensions:
+          - Name: FunctionName
+            Value: !Ref NotifyDashrestaurantLambdaFunction
+        AlarmActions:
+          - !Ref AlarmTopic
 
   Outputs:
     EventBusName:
