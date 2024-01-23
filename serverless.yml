@@ -33,6 +33,9 @@ provider:
             - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${self:service}/${param:ssmStage, sls:stage}/search-restaurants/config
             - !Sub arn:aws:ssm:${AWS::Region}:${AWS::AccountId}:parameter/${self:service}/${param:ssmStage, sls:stage}/search-restaurants/secretString
         - Effect: Allow
+          Action: kms:Decrypt
+          Resource: ${ssm:/${self:service}/${param:ssmStage, sls:stage}/kmsArn}
+        - Effect: Allow
           Action: events:PutEvents
           Resource: !GetAtt EventBus.Arn
         - Effect: Allow
