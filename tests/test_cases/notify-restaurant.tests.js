@@ -1,64 +1,50 @@
 const { init } = require("../steps/init");
 const when = require("../steps/when");
 const chance = require("chance").Chance();
-const { EventBridgeClient } = require("@aws-sdk/client-eventbridge");
-const { SNSClient } = require("@aws-sdk/client-sns");
-
-const mockEvbSend = jest.fn();
-EventBridgeClient.prototype.send = mockEvbSend;
-const mockSnsSend = jest.fn();
-SNSClient.prototype.send = mockSnsSend;
+const messages = require("../messages");
 
 describe(`When we invoke the notify-restaurant function`, () => {
-  if (process.env.TEST_MODE === "handler") {
-    beforeAll(async () => {
-      await init();
+  const event = {
+    source: "big-mouth",
+    "detail-type": "order_placed",
+    detail: {
+      orderId: chance.guid(),
+      restaurantName: "Fangtasia",
+    },
+  };
 
-      mockEvbSend.mockClear();
-      mockSnsSend.mockClear();
+  let listener;
 
-      mockEvbSend.mockReturnValue({});
-      mockSnsSend.mockReturnValue({});
+  beforeAll(async () => {
+    await init();
+    listener = messages.startListening();
+    await when.we_invoke_notify_restaurant(event);
+  });
 
-      const event = {
-        source: "big-mouth",
-        "detail-type": "order_placed",
-        detail: {
-          orderId: chance.guid(),
-          userEmail: chance.email(),
-          restaurantName: "Fangtasia",
-        },
-      };
-      await when.we_invoke_notify_restaurant(event);
+  afterAll(async () => {
+    await listener.stop();
+  });
+
+  it(`Should publish message to SNS`, async () => {
+    const expectedMsg = JSON.stringify(event.detail);
+    await listener.waitForMessage(
+      (x) =>
+        x.sourceType === "sns" &&
+        x.source === process.env.restaurant_notification_topic &&
+        x.message === expectedMsg
+    );
+  }, 10000);
+
+  it(`Should publish "restaurant_notified" event to EventBridge`, async () => {
+    const expectedMsg = JSON.stringify({
+      ...event,
+      "detail-type": "restaurant_notified",
     });
-
-    it(`Should publish message to SNS`, async () => {
-      expect(mockSnsSend).toHaveBeenCalledTimes(1);
-      const [publishCmd] = mockSnsSend.mock.calls[0];
-
-      expect(publishCmd.input).toEqual({
-        Message: expect.stringMatching(`"restaurantName":"Fangtasia"`),
-        TopicArn: expect.stringMatching(
-          process.env.restaurant_notification_topic
-        ),
-      });
-    });
-
-    it(`Should publish event to EventBridge`, async () => {
-      expect(mockEvbSend).toHaveBeenCalledTimes(1);
-      const [putEventsCmd] = mockEvbSend.mock.calls[0];
-      expect(putEventsCmd.input).toEqual({
-        Entries: [
-          expect.objectContaining({
-            Source: "big-mouth",
-            DetailType: "restaurant_notified",
-            Detail: expect.stringContaining(`"restaurantName":"Fangtasia"`),
-            EventBusName: process.env.bus_name,
-          }),
-        ],
-      });
-    });
-  } else {
-    it("no acceptance test", () => {});
-  }
+    await listener.waitForMessage(
+      (x) =>
+        x.sourceType === "eventbridge" &&
+        x.source === process.env.bus_name &&
+        x.message === expectedMsg
+    );
+  }, 10000);
 });

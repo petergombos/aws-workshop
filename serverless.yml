@@ -6,6 +6,12 @@ custom:
   name: peter
   export-env:
     overwrite: true
+  exportOutputs:
+    include:
+      - E2eTestQueueUrl
+      - CognitoUserPoolServerClientId
+    output:
+      file: ./.env.cfnoutputs
 
 provider:
   name: aws
@@ -32,7 +38,6 @@ provider:
         - Effect: Allow
           Action: sns:Publish
           Resource: !Ref RestaurantNotificationTopic
-
   environment:
     rest_api_url: !Sub https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/${sls:stage}
     serviceName: ${self:service}
@@ -53,7 +58,6 @@ functions:
       orders_api: !Sub https://${ApiGatewayRestApi}.execute-api.${AWS::Region}.amazonaws.com/${sls:stage}/orders
       cognito_user_pool_id: !Ref CognitoUserPool
       cognito_client_id: !Ref WebCognitoUserPoolClient
-      cognito_server_client_id: !Ref ServerCognitoUserPoolClient
 
   get-restaurants:
     handler: functions/get-restaurants.handler
@@ -106,6 +110,12 @@ functions:
       restaurant_notification_topic: !Ref RestaurantNotificationTopic
 
 resources:
+  Conditions:
+    IsE2eTest:
+      Fn::StartsWith:
+        - ${sls:stage}
+        - dev
+
   Resources:
     RestaurantsTable:
       Type: AWS::DynamoDB::Table
@@ -194,7 +204,77 @@ resources:
     RestaurantNotificationTopic:
       Type: AWS::SNS::Topic
 
+    E2eTestQueue:
+      Type: AWS::SQS::Queue
+      Condition: IsE2eTest
+      Properties:
+        MessageRetentionPeriod: 60
+        VisibilityTimeout: 1
+
+    E2eTestQueuePolicy:
+      Type: AWS::SQS::QueuePolicy
+      Condition: IsE2eTest
+      Properties:
+        Queues:
+          - !Ref E2eTestQueue
+        PolicyDocument:
+          Version: "2012-10-17"
+          Statement:
+            - Effect: Allow
+              Principal: "*"
+              Action: SQS:SendMessage
+              Resource: !GetAtt E2eTestQueue.Arn
+              Condition:
+                ArnEquals:
+                  aws:SourceArn: !Ref RestaurantNotificationTopic
+            - Effect: Allow
+              Principal: "*"
+              Action: SQS:SendMessage
+              Resource: !GetAtt E2eTestQueue.Arn
+              Condition:
+                ArnEquals:
+                  aws:SourceArn: !GetAtt E2eTestEventBridgeRule.Arn
+
+    E2eTestSnsSubscription:
+      Type: AWS::SNS::Subscription
+      Condition: IsE2eTest
+      Properties:
+        Protocol: sqs
+        Endpoint: !GetAtt E2eTestQueue.Arn
+        RawMessageDelivery: false
+        Region: !Ref AWS::Region
+        TopicArn: !Ref RestaurantNotificationTopic
+
+    E2eTestEventBridgeRule:
+      Type: AWS::Events::Rule
+      Condition: IsE2eTest
+      Properties:
+        EventBusName: !Ref EventBus
+        EventPattern:
+          source: ["big-mouth"]
+        State: ENABLED
+        Targets:
+          - Arn: !GetAtt E2eTestQueue.Arn
+            Id: e2eTestQueue
+            InputTransformer:
+              InputPathsMap:
+                source: "$.source"
+                detailType: "$.detail-type"
+                detail: "$.detail"
+              InputTemplate: !Sub >
+                {
+                  "event": {
+                    "source": <source>,
+                    "detail-type": <detailType>,
+                    "detail": <detail>
+                  },
+                  "eventBusName": "${EventBus}"
+                }
+
   Outputs:
+    EventBusName:
+      Value: !Ref EventBus
+
     RestaurantsTableName:
       Value: !Ref RestaurantsTable
 
@@ -210,14 +290,17 @@ resources:
     CognitoUserPoolServerClientId:
       Value: !Ref ServerCognitoUserPoolClient
 
-    EventBusName:
-      Value: !Ref EventBus
-
     RestaurantNotificationTopicName:
       Value: !GetAtt RestaurantNotificationTopic.TopicName
 
     RestaurantNotificationTopicArn:
       Value: !Ref RestaurantNotificationTopic
 
+    E2eTestQueueUrl:
+      Condition: IsE2eTest
+      Value: !Ref E2eTestQueue
+
 plugins:
   - serverless-export-env
+  - serverless-export-outputs
+  - serverless-plugin-extrinsic-functions
