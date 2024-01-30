@@ -1,7 +1,7 @@
 const { promisify } = require("util");
 const awscred = require("awscred");
 const dotenv = require("dotenv");
-dotenv.config({ path: "./.test.env" });
+dotenv.config({ path: "./.env.local" });
 dotenv.config();
 dotenv.config({ path: ".env.cfnoutputs" });
 

@@ -33,6 +33,7 @@
   },
   "dependencies": {
     "@aws-lambda-powertools/idempotency": "^1.17.0",
+    "@aws-lambda-powertools/logger": "^1.18.0",
     "@aws-sdk/client-ssm": "^3.485.0",
     "@middy/core": "^4.7.0",
     "@middy/ssm": "^4.7.0",
