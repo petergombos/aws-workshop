@@ -12,6 +12,12 @@ const {
   injectLambdaContext,
 } = require("@aws-lambda-powertools/logger");
 const logger = new Logger({ serviceName: process.env.serviceName });
+const {
+  Tracer,
+  captureLambdaHandler,
+} = require("@aws-lambda-powertools/tracer");
+const tracer = new Tracer({ serviceName: process.env.serviceName });
+tracer.captureAWSv3Client(dynamodb);
 
 const middyCacheEnabled = JSON.parse(process.env.middy_cache_enabled);
 const middyCacheExpiry = parseInt(process.env.middy_cache_expiry_milliseconds);
@@ -66,4 +72,5 @@ module.exports.handler = middy(async (event, context) => {
       },
     })
   )
-  .use(injectLambdaContext(logger));
+  .use(injectLambdaContext(logger))
+  .use(captureLambdaHandler(tracer));

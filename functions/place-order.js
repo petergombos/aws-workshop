@@ -10,6 +10,12 @@ const {
 const logger = new Logger({ serviceName: process.env.serviceName });
 const eventBridge = new EventBridgeClient();
 const chance = require("chance").Chance();
+const {
+  Tracer,
+  captureLambdaHandler,
+} = require("@aws-lambda-powertools/tracer");
+const tracer = new Tracer({ serviceName: process.env.serviceName });
+tracer.captureAWSv3Client(eventBridge);
 
 const busName = process.env.bus_name;
 
@@ -47,4 +53,6 @@ module.exports.handler = middy(async (event, context) => {
   };
 
   return response;
-}).use(injectLambdaContext(logger));
+})
+  .use(injectLambdaContext(logger))
+  .use(captureLambdaHandler(tracer));
