@@ -1,3 +1,4 @@
+const middy = require("@middy/core");
 const {
   EventBridgeClient,
   PutEventsCommand,
