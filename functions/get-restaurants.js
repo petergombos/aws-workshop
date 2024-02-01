@@ -7,7 +7,10 @@ const dynamodbClient = new DynamoDB();
 const dynamodb = DynamoDBDocumentClient.from(dynamodbClient);
 const middy = require("@middy/core");
 const ssm = require("@middy/ssm");
-const { Logger } = require("@aws-lambda-powertools/logger");
+const {
+  Logger,
+  injectLambdaContext,
+} = require("@aws-lambda-powertools/logger");
 const logger = new Logger({ serviceName: process.env.serviceName });
 
 const middyCacheEnabled = JSON.parse(process.env.middy_cache_enabled);
@@ -35,6 +38,8 @@ const getRestaurants = async (count) => {
 };
 
 module.exports.handler = middy(async (event, context) => {
+  logger.refreshSampleRateCalculation();
+
   const restaurants = await getRestaurants(context.config.defaultResults);
   const response = {
     statusCode: 200,
@@ -42,13 +47,15 @@ module.exports.handler = middy(async (event, context) => {
   };
 
   return response;
-}).use(
-  ssm({
-    cache: middyCacheEnabled,
-    cacheExpiry: middyCacheExpiry,
-    setToContext: true,
-    fetchData: {
-      config: `/${serviceName}/${ssmStage}/get-restaurants/config`,
-    },
-  })
-);
+})
+  .use(
+    ssm({
+      cache: middyCacheEnabled,
+      cacheExpiry: middyCacheExpiry,
+      setToContext: true,
+      fetchData: {
+        config: `/${serviceName}/${ssmStage}/get-restaurants/config`,
+      },
+    })
+  )
+  .use(injectLambdaContext(logger));
