@@ -23,7 +23,7 @@ const persistenceStore = new DynamoDBPersistenceLayer({
   tableName: process.env.idempotency_table,
 });
 
-module.exports.handler = middy(async (event, context) => {
+const handler = middy(async (event, context) => {
   logger.refreshSampleRateCalculation();
 
   const order = event.detail;
