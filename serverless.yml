@@ -22,6 +22,9 @@ custom:
     minify: true
     external:
       - "@aws-sdk/*"
+  lumigo:
+    token: t_d033782f17054acba3e2e
+    nodePackageManager: npm
 
 package:
   individually: true
@@ -430,3 +433,4 @@ plugins:
   - serverless-plugin-extrinsic-functions
   - serverless-iam-roles-per-function
   - serverless-esbuild
+  - serverless-lumigo
